@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -36,14 +37,14 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 	return &AuthHandler{authService: authService}
 }
 
-func (h *AuthHandler) RegisterRoutes(router *gin.RouterGroup, redisService *service.RedisService, jwtSecret []byte) {
+func (h *AuthHandler) RegisterRoutes(router *gin.RouterGroup, redisService *service.RedisService, jwtSecret []byte, jwtTTL time.Duration) {
 	authGroup := router.Group("/auth")
 	authGroup.POST("/register", h.Register)
 	authGroup.POST("/login", h.Login)
 	authGroup.POST("/logout", h.Logout)
 
 	userGroup := router.Group("/users")
-	userGroup.Use(middleware.RequireAuth(redisService, jwtSecret))
+	userGroup.Use(middleware.RequireAuth(redisService, jwtSecret, jwtTTL))
 	userGroup.GET("/me", h.GetCurrentUser)
 	userGroup.PUT("/me", h.UpdateCurrentUser)
 	userGroup.DELETE("/me", h.DeleteCurrentUser)
@@ -56,7 +57,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authService.Register(c.Request.Context(), service.RegisterInput{
+	profile, err := h.authService.Register(c.Request.Context(), service.RegisterInput{
 		Username: request.Username,
 		Email:    request.Email,
 		Password: request.Password,
@@ -66,7 +67,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, result)
+	c.JSON(http.StatusCreated, profile)
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {

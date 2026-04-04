@@ -65,7 +65,7 @@ func main() {
 	healthHandler.RegisterRoutes(router)
 
 	api := router.Group("/api/v1")
-	authHandler.RegisterRoutes(api, authRedis, []byte(cfg.JWTSecret))
+	authHandler.RegisterRoutes(api, authRedis, []byte(cfg.JWTSecret), cfg.JWTTTL)
 
 	log.Printf("HTTP 服务启动成功，监听地址 %s", cfg.HTTPAddr)
 	if err := router.Run(cfg.HTTPAddr); err != nil {

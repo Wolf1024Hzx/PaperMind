@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -13,7 +14,7 @@ import (
 
 const CurrentUserIDKey = "currentUserID"
 
-func RequireAuth(redisService *service.RedisService, jwtSecret []byte) gin.HandlerFunc {
+func RequireAuth(redisService *service.RedisService, jwtSecret []byte, jwtTTL time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. 从 Authorization header 获取 token
 		header := c.GetHeader("Authorization")
@@ -62,7 +63,13 @@ func RequireAuth(redisService *service.RedisService, jwtSecret []byte) gin.Handl
 			return
 		}
 
-		// 4. 存入 context
+		// 4. 刷新 token TTL（如果剩余时间 < TTL/2）
+		ttl, err := redisService.TTL(c.Request.Context(), tokenString)
+		if err == nil && ttl > 0 && ttl < jwtTTL/2 {
+			redisService.Expire(c.Request.Context(), tokenString, jwtTTL)
+		}
+
+		// 5. 存入 context
 		c.Set(CurrentUserIDKey, claims.UserID)
 		c.Next()
 	}

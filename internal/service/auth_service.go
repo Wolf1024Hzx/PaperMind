@@ -72,7 +72,7 @@ func NewAuthService(userRepo *repository.UserRepository, redisService *RedisServ
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*AuthResult, error) {
+func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*UserProfile, error) {
 	input.Username = strings.TrimSpace(input.Username)
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Username == "" || input.Email == "" || input.Password == "" {
@@ -98,15 +98,8 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*AuthR
 		return nil, err
 	}
 
-	token, err := s.createToken(user)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AuthResult{
-		Token: token,
-		User:  toUserProfile(user),
-	}, nil
+	profile := toUserProfile(user)
+	return &profile, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, input LoginInput) (*AuthResult, error) {

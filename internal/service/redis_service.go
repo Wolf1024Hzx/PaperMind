@@ -38,3 +38,11 @@ func (r *RedisService) Exists(ctx context.Context, key string) (bool, error) {
 func (r *RedisService) Del(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.prefix+key).Err()
 }
+
+func (r *RedisService) TTL(ctx context.Context, key string) (time.Duration, error) {
+	return r.client.TTL(ctx, r.prefix+key).Result()
+}
+
+func (r *RedisService) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	return r.client.Expire(ctx, r.prefix+key, ttl).Err()
+}
