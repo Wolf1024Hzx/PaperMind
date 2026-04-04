@@ -1,0 +1,82 @@
+# ==================== Go ====================
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Build output
+/bin/
+/dist/
+
+# ==================== IDE ====================
+# JetBrains IDEs (IntelliJ, GoLand, WebStorm, etc.)
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Sublime Text
+*.sublime-workspace
+
+# ==================== Environment & Secrets ====================
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Configuration files with secrets
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ==================== IDE DIR ====================
+.claude/
+
+# ==================== Database ====================
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# ==================== Logs ====================
+logs/
+*.log
+
+# ==================== OS ====================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Linux
+*~
+
+# ==================== Temporary Files ====================
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# ==================== Project Specific ====================
+# SQL IDE configs (contains local database connections)
+sql/.idea/

@@ -22,9 +22,10 @@ var (
 )
 
 type AuthService struct {
-	userRepo  *repository.UserRepository
-	jwtSecret []byte
-	jwtTTL    time.Duration
+	userRepo     *repository.UserRepository
+	redisService *RedisService
+	jwtSecret    []byte
+	jwtTTL       time.Duration
 }
 
 type RegisterInput struct {
@@ -62,11 +63,12 @@ type TokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewAuthService(userRepo *repository.UserRepository, jwtSecret string, jwtTTL time.Duration) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, redisService *RedisService, jwtSecret string, jwtTTL time.Duration) *AuthService {
 	return &AuthService{
-		userRepo:  userRepo,
-		jwtSecret: []byte(jwtSecret),
-		jwtTTL:    jwtTTL,
+		userRepo:     userRepo,
+		redisService: redisService,
+		jwtSecret:    []byte(jwtSecret),
+		jwtTTL:       jwtTTL,
 	}
 }
 
@@ -137,26 +139,6 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 	}, nil
 }
 
-func (s *AuthService) ParseToken(tokenString string) (*TokenClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (any, error) {
-		if token.Method != jwt.SigningMethodHS256 {
-			return nil, ErrInvalidCredentials
-		}
-
-		return s.jwtSecret, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	claims, ok := token.Claims.(*TokenClaims)
-	if !ok || !token.Valid {
-		return nil, ErrInvalidCredentials
-	}
-
-	return claims, nil
-}
-
 func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*UserProfile, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
@@ -223,14 +205,27 @@ func (s *AuthService) createToken(user *model.User) (string, error) {
 		UserID:   user.ID.String(),
 		Username: user.Username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   user.ID.String(),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.jwtSecret)
+	tokenString, err := token.SignedString(s.jwtSecret)
+	if err != nil {
+		return "", err
+	}
+
+	// 存入 Redis：key = token, value = userID, TTL = token 有效期
+	if err := s.redisService.Set(context.Background(), tokenString, user.ID.String(), s.jwtTTL); err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, tokenString string) error {
+	return s.redisService.Del(ctx, tokenString)
 }
 
 func toUserProfile(user *model.User) UserProfile {

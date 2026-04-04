@@ -1,11 +1,5 @@
 # Day 2 进度记录
 
-## 今日目标
-
-- 学习 Gin、GORM 的基本用法
-- 对比 Spring Boot 理解 Go Web 项目架构
-- 掌握新增一组功能接口的完整流程
-
 ## 今日学习内容
 
 ### 1. 项目架构对比（Gin vs Spring Boot）
@@ -204,6 +198,103 @@ authHandler := handler.NewAuthHandler(authService)
 authHandler.RegisterRoutes(api)
 ```
 
+## JWT 迁移到 Redis 实现
+
+### 背景
+
+当前 JWT 是无状态模式，token 签发后无法主动失效（用户登出后 token 仍有效直到过期）。Redis 已初始化但未使用。
+
+### 实现方案
+
+采用**白名单模式**：
+- 签发 token → 存入 Redis（key = `papermind:auth:{token}`, value = userID）
+- 验证 token → 先查 Redis（是否存在）→ 再解析 JWT（验证签名）
+- 登出 → 从 Redis 删除 token
+
+### 新增文件
+
+**internal/service/redis_service.go** - Redis 工具封装：
+
+```go
+type RedisService struct {
+    client *redis.Client
+    prefix string  // 自动带前缀 "papermind:auth:"
+}
+
+func (r *RedisService) Set(ctx context.Context, key string, value string, ttl time.Duration) error
+func (r *RedisService) Exists(ctx context.Context, key string) (bool, error)
+func (r *RedisService) Del(ctx context.Context, key string) error
+```
+
+### 修改文件
+
+**internal/service/auth_service.go**：
+- AuthService 添加 `redisService` 字段
+- `createToken()` 签发后存入 Redis（完整 token 作为 key）
+- 新增 `Logout()` 方法删除 Redis 中的 token
+- 删除 `ParseToken()` 方法（移到中间件）
+
+**internal/middleware/jwt.go**：
+- `RequireAuth()` 直接依赖 RedisService + jwtSecret
+- 验证流程：查 Redis → 解析 JWT → 存 userID 到 context
+- 中间件和 Service 是**平级关系**，不调用 AuthService
+
+**internal/handler/auth.go**：
+- 新增 `Logout()` handler
+- `RegisterRoutes()` 接收 redisService 和 jwtSecret 参数
+
+**cmd/server/main.go**：
+- 创建 `RedisService`（带 `papermind:auth:` 前缀）
+- jwtSecret 从 config 获取，同时传给 AuthService 和中间件
+
+### 调用拓扑
+
+```
+config.Load() → cfg.JWTSecret
+                    ↓
+        ┌──────────┴──────────┐
+        ↓                     ↓
+   AuthService（签发）    Middleware（验证）
+        ↓                     ↓
+   RedisService         RedisService + jwtSecret
+```
+
+### 关键设计决策
+
+1. **中间件不调用 Service**：中间件直接依赖 RedisService，不"越级"调用 AuthService
+2. **jwtSecret 从 config 直接获取**：不经过 AuthService，避免改变调用拓扑
+3. **TokenClaims 放在 service 包**：避免循环依赖（middleware 已经引用 service.RedisService）
+4. **完整 token 作为 Redis key**：简洁直观，不需要额外生成 jti
+
+### 新增接口
+
+- `POST /api/v1/auth/logout` - 登出（从 Redis 删除 token）
+
+### Go 循环依赖问题
+
+Go 不允许 A 引用 B，B 又引用 A。解决方案：
+- 把共享类型放在被依赖的一方（TokenClaims 放 service，middleware 引用）
+- 或新建独立包（如 `types/`）
+
+### Redis 学习要点
+
+```go
+// 设置带 TTL
+redisClient.Set(ctx, key, value, ttl)
+
+// 检查是否存在
+val, err := redisClient.Exists(ctx, key).Result()  // 返回 int64
+
+// 删除
+redisClient.Del(ctx, key)
+```
+
+### 验证方式
+
+1. 登录后检查 Redis：`redis-cli KEYS "papermind:auth:*"`
+2. 登出后检查 Redis：key 应被删除
+3. 用已登出的 token 访问接口：返回 401 "token 已失效"
+
 ## 今日总结
 
 Day 2 主要学习 Gin、GORM 与 Spring Boot 的对比理解。核心收获：
@@ -217,7 +308,11 @@ Day 2 主要学习 Gin、GORM 与 Spring Boot 的对比理解。核心收获：
 
 Go 是"手动挡"，Spring Boot 是"自动挡"。Go 需要手动处理每一步，但更透明、更可控。
 
+学习后，发现当前项目没有使用上 Redis，于是修改了整个 JWT 的逻辑
+
 ## 后续计划
 
 - 继续学习项目其他模块
 - 开始实现论文相关功能
+
+---

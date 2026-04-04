@@ -52,8 +52,11 @@ func main() {
 		log.Fatalf("Redis Ping 失败: %v", err)
 	}
 
+	// 创建 RedisService（带前缀）
+	authRedis := service.NewRedisService(redisClient, "papermind:auth:")
+
 	userRepo := repository.NewUserRepository(db)
-	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTTTL)
+	authService := service.NewAuthService(userRepo, authRedis, cfg.JWTSecret, cfg.JWTTTL)
 
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler(authService)
@@ -62,7 +65,7 @@ func main() {
 	healthHandler.RegisterRoutes(router)
 
 	api := router.Group("/api/v1")
-	authHandler.RegisterRoutes(api)
+	authHandler.RegisterRoutes(api, authRedis, []byte(cfg.JWTSecret))
 
 	log.Printf("HTTP 服务启动成功，监听地址 %s", cfg.HTTPAddr)
 	if err := router.Run(cfg.HTTPAddr); err != nil {
