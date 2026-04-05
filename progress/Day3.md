@@ -199,6 +199,51 @@ ledongthuc/pdf 库 `GetTextByRow()` 返回单词无空格，尝试根据标点�
 
 PDF 解析质量差是行业已知难题，不是代码 bug。务实方案：添加 Markdown 通道，快速推进核心 RAG Pipeline。面试时诚实说明：系统支持两种输入格式，复杂排版可手动整理成 Markdown。
 
+## Day 4 准备工作
+
+### 已完成
+
+| 项目 | 说明 |
+|------|------|
+| Go 依赖安装 | `pgvector-go` + `errgroup` |
+| chunks 表建表 | 已执行 SQL，包含 vector(1024) 和 HNSW 索引 |
+| Embedding API 验证 | qwen3-vl-embedding 调用成功，返回 1024 维向量 |
+
+### API 调用验证
+
+写了 `demo/main.go` 测试阿里云 DashScope API：
+
+```powershell
+$env:DASHSCOPE_API_KEY="sk-xxxxx"
+go run demo/main.go
+# 输出：请求成功! 向量维度: 1024
+```
+
+**关键信息：**
+
+| 配置项 | 值 |
+|--------|-----|
+| 模型 | `qwen3-vl-embedding` |
+| API 端点 | `dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding` |
+| 向量维度 | 1024（可选 2560/2048/1536/768/512/256） |
+| 单次请求限制 | 20 条 |
+| 环境变量 | `DASHSCOPE_API_KEY` |
+
+### 待实现文件清单
+
+```
+internal/
+├── model/
+│   └── chunk.go              # Chunk 实体
+├── repository/
+│   └── chunk_repo.go         # Chunk CRUD
+├── pkg/
+│   └── chunker/
+│       └── paper_chunker.go  # 结构感知切片器
+└── service/
+    └── embedding_service.go  # Embedding API 封装
+```
+
 ## 后续计划
 
 - 实现文本切片（Chunking）

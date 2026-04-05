@@ -43,3 +43,28 @@ CREATE TABLE papers (
 CREATE INDEX idx_papers_user_id ON papers(user_id);
 CREATE INDEX idx_papers_file_hash ON papers(file_hash);    -- 去重检查
 CREATE INDEX idx_papers_year ON papers(year);               -- 支持按年份筛选检索范围
+
+-- chunks 表（论文切片 + 向量）
+CREATE TABLE chunks (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    paper_id      UUID          NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+    chunk_index   INT           NOT NULL,
+    content       TEXT          NOT NULL,
+    token_count   INT           NOT NULL,
+    embedding     vector(1024)  NOT NULL,
+
+    -- 论文结构元数据
+    section_type  VARCHAR(64),
+    section_title VARCHAR(256),
+    page_number   INT,
+
+    created_at    TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+
+-- 向量检索索引（HNSW，余弦距离）
+CREATE INDEX idx_chunks_embedding ON chunks
+    USING hnsw (embedding vector_cosine_ops);
+
+-- 业务索引
+CREATE INDEX idx_chunks_paper_id ON chunks(paper_id);
+CREATE INDEX idx_chunks_section_type ON chunks(section_type);

@@ -8,7 +8,7 @@ import (
 
 type Paper struct {
 	ID         uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey" json:"id"`
-	UserID     uuid.UUID `gorm:"column:user_id;not null" json:"userId"`
+	UserID     uuid.UUID `gorm:"column:user_id;not null" json:"userID"`
 	Filename   string    `gorm:"column:filename;not null" json:"filename"`
 	FileSize   int64     `gorm:"column:file_size;not null" json:"fileSize"`
 	FileHash   string    `gorm:"column:file_hash;not null" json:"fileHash"`
