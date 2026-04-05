@@ -61,3 +61,42 @@ func (r *PaperRepository) UpdatePaperInfo(ctx context.Context, id uuid.UUID, upd
 func (r *PaperRepository) DeletePaper(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&model.Paper{}, "id = ?", id).Error
 }
+
+// 更新论文的处理状态
+func (r *PaperRepository) UpdateStatus(ctx context.Context, paperID uuid.UUID, status string) error {
+	return r.db.WithContext(ctx).
+		Model(&model.Paper{}).
+		Where("id = ?", paperID).
+		Update("status", status).Error
+}
+
+// 仅当字段为空时更新元数据
+func (r *PaperRepository) UpdateMetadataIfEmpty(ctx context.Context, paperID uuid.UUID, updates map[string]interface{}) error {
+	// 先查出当前记录
+	var paper model.Paper
+	if err := r.db.WithContext(ctx).First(&paper, "id = ?", paperID).Error; err != nil {
+		return err
+	}
+
+	// 只更新当前为空的字段
+	finalUpdates := make(map[string]interface{})
+	if v, ok := updates["title"]; ok && paper.Title == "" {
+		if title, ok := v.(string); ok && title != "" {
+			finalUpdates["title"] = title
+		}
+	}
+	if v, ok := updates["authors"]; ok && paper.Authors == "" {
+		if authors, ok := v.(string); ok && authors != "" {
+			finalUpdates["authors"] = authors
+		}
+	}
+
+	if len(finalUpdates) == 0 {
+		return nil
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&model.Paper{}).
+		Where("id = ?", paperID).
+		Updates(finalUpdates).Error
+}

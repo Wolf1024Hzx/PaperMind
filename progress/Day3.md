@@ -1,6 +1,6 @@
 # Day 3 进度记录
 
-> 日期：2026-04-05 | 时间：9:30 - 14:30
+> 日期：2026-04-05 | 时间：9:30 - 16:15
 
 ## 今日学习内容
 
@@ -11,126 +11,132 @@
 | 默认推断 | Struct 名转 snake_case，`Paper` → `papers` |
 | TableName() 方法 | 显式指定，优先级更高 |
 
-GORM 通过传入的 struct 类型推断表名，不需要在 Repository 里显式指定。
-
 ### 2. GORM 查询方法
 
 | 方法 | 用途 | 返回 |
 |------|------|------|
 | `Create(&entity)` | 创建记录 | error |
-| `First(&entity, condition)` | 查单个 | 写入 entity |
-| `Find(&entities, condition)` | 查多个 | 写入 slice |
-| `Model(&Entity{}).Where().Updates(map)` | 更新 | error |
-| `Delete(&Entity{}, condition)` | 删除 | error |
+| `First(&entity, cond)` | 查单个 | 写入 entity |
+| `Find(&slice, cond)` | 查多个 | 写入 slice |
+| `Model().Where().Updates()` | 更新 | error |
+| `Delete(&Entity{}, cond)` | 删除 | error |
 
-关键点：`Find` 查多个时必须传指针 `&papers`，否则无法写入结果。
+关键：`Find` 查多个时必须传指针 `&papers`。
 
 ### 3. GORM 条件列名
 
-Where 条件中的列名使用**数据库真实列名**（snake_case）：
-
-```go
-Where("user_id = ?", userID)   // ✅ 推荐
-Where("FileHash = ?", hash)    // ✅ 可行（GORM 自动映射）
-Where("fileHash = ?", hash)    // ❌ 错误
-```
+使用**数据库真实列名**（snake_case）：
+- ✅ `Where("user_id = ?", userID)`
+- ❌ `Where("fileHash = ?", hash)`（大小写不一致）
 
 ### 4. Go 命名惯例
 
-缩写词（ID、URL、HTTP）应保持大小写一致：`userID` 而不是 `userId`。
+缩写词（ID、URL、HTTP）保持大小写一致：`userID` 而不是 `userId`。
 
-### 5. Gin multipart/form-data 文件上传
+### 5. Gin 文件上传
 
-```go
-file, err := c.FormFile("file")        // 获取上传文件
-fileContent, err := file.Open()        // 打开文件
-fileData := make([]byte, file.Size)    // 读取内容
-```
+`c.FormFile("file")` 获取上传文件，`file.Open()` 打开读取。
 
-### 6. SHA-256 文件哈希计算
+### 6. SHA-256 文件哈希
 
-```go
-hash := sha256.Sum256(fileData)
-fileHash := hex.EncodeToString(hash[:])  // 转为十六进制字符串
-```
+`sha256.Sum256(fileData)` + `hex.EncodeToString()` 去重。
+
+### 7. Goroutine 异步处理
+
+上传接口立即返回，后台异步处理 PDF：
+- 使用 `context.Background()` 防止请求结束导致 ctx 失效
+- `defer recover()` 防止 panic 扩散
+
+### 8. PDF 文本提取库（ledongthuc/pdf）
+
+`Open()` 打开 → `NumPage()` 获取页数 → `Page(i).GetTextByRow()` 按行提取文本。
+
+### 9. 论文章节识别
+
+通过正则匹配标题格式：`1. Introduction`、`3.2 Method`、`IV. Experiments`。
+章节类型映射：abstract / introduction / related_work / method / experiment / conclusion / other。
 
 ## 今日工程实现内容
 
 ### papers 表设计
 
-根据项目设计文档创建 papers 表，包含：
-- 文件信息：`filename`、`file_size`、`file_hash`（去重）
-- 论文元数据：`title`、`authors`、`year`、`venue`、`abstract`
-- 处理状态：`status`、`chunk_count`
-
-索引：`user_id`、`file_hash`、`year`（支持年份过滤检索）
-
-### model/paper.go
-
-参考 model/user.go 实现，关键点：
-- `FileSize` 类型为 `int64`（对应 SQL BIGINT）
-- `Year` 用 `*int` 表示可空字段
-- 实现 `TableName()` 方法返回 `"papers"`
-
-### repository/paper_repo.go
-
-和 agent 持续对话，参考 user_repo.go 手动实现，包含方法：
-
-| 方法 | 用途 |
+| 字段 | 说明 |
 |------|------|
-| `Create` | 创建论文记录 |
-| `FindByID` | 根据 ID 查单个 |
-| `FindByUserID` | 查用户的所有论文 |
-| `FindByFileHash` | 根据 hash 查重 |
-| `UpdatePaperInfo` | 更新论文信息 |
-| `DeletePaper` | 删除论文 |
+| `filename`、`file_size`、`file_hash` | 文件信息（去重） |
+| `title`、`authors`、`year`、`venue`、`abstract` | 论文元数据 |
+| `status`、`chunk_count` | 处理状态 |
 
-### service/paper_service.go
+索引：`user_id`、`file_hash`、`year`。
 
-同上，逐函数与 agent 对话实现，包含方法：
+### 论文 CRUD 实现
 
-| 方法 | 用途 |
+**新增文件：**
+
+| 文件 | 说明 |
 |------|------|
-| `UploadPaper` | 上传论文（去重 + 创建记录 + 保存文件） |
-| `ListByUser` | 获取用户论文列表 |
-| `GetByID` | 获取论文详情（验证所有权） |
-| `Delete` | 删除论文（验证所有权 + 删库 + 删文件） |
+| `model/paper.go` | Paper 实体，FileSize 为 int64，Year 用 *int |
+| `repository/paper_repo.go` | CRUD + UpdateStatus + UpdateMetadataIfEmpty |
+| `service/paper_service.go` | 业务逻辑，异步处理 PDF |
+| `handler/paper.go` | 上传、列表、详情、删除接口 |
+| `config/config.go` | 新增 UploadDir 配置 |
 
-新增 `service/errors.go` 集中管理错误常量。
+**修改文件：**
 
-### handler/paper.go
+| 文件 | 改动 |
+|------|------|
+| `main.go` | 创建上传目录、注册 PaperHandler |
 
-Handler 不复杂，直接让 agent 写好，包含接口：
+### PDF 文本提取与章节解析
 
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| `UploadPaper` | POST /api/v1/papers | 上传 PDF |
-| `ListPapers` | GET /api/v1/papers | 论文列表 |
-| `GetPaperByID` | GET /api/v1/papers/:id | 论文详情 |
-| `DeletePaper` | DELETE /api/v1/papers/:id | 删除论文 |
+**新增文件：**
 
-### main.go 注册 PaperHandler
+| 文件 | 说明 |
+|------|------|
+| `internal/pkg/extractor/pdf.go` | PDF 文本提取 + 元数据提取 |
+| `internal/pkg/parser/section_parser.go` | 论文章节结构识别 |
 
-- 添加 `os.MkdirAll` 创建上传目录
-- 注册 PaperHandler 到路由
+**处理流程：**
 
-### config/config.go 新增 UploadDir
-
-配置项：`UPLOAD_DIR` 环境变量，默认值 `./uploads/papers`
+```
+上传 PDF → 保存文件 → 创建记录 → status: pending
+                                    ↓
+                          [异步 Goroutine]
+                                    ↓
+              extracting → PDF 文本提取 → parsing → 结构解析
+                                    ↓
+              completed → 日志输出章节列表
+```
 
 ### 接口测试
 
-所有接口已测试通过，上传接口返回示例：
+| 接口 | 状态 |
+|------|------|
+| `POST /api/v1/papers` (上传) | ✅ |
+| `GET /api/v1/papers` (列表) | ✅ |
+| `GET /api/v1/papers/:id` (详情) | ✅ |
+| `DELETE /api/v1/papers/:id` | ✅ |
 
-```json
-{
-  "id": "4da54006-e9d8-4978-b0a1-913a1d7e6797",
-  "filename": "ProX_Net.pdf",
-  "fileSize": 13172862,
-  "status": "pending",
-  "chunkCount": 0
-}
-```
+## 遇到的问题
+
+### 1. PDF 文本提取单词粘连
+
+ledongthuc/pdf 库 `GetTextByRow()` 返回单词无空格，尝试根据标点加空格但效果有限，部分单词被错误拆分。
+
+### 2. 章节标题识别适配困难
+
+| 格式 | 示例 | 状态 |
+|------|------|------|
+| NeurIPS/ICML | `1 Introduction` | ✅ 可匹配 |
+| 部分期刊 | `Introduction`（无编号） | ⚠️ 需白名单 |
+| 双栏论文 | 文本顺序混乱 | ❌ 无法处理 |
+
+### 3. 其他问题
+
+| 问题 | 说明 |
+|------|------|
+| 双栏格式 | 文本提取顺序混乱，左右栏交错 |
+| PDF 元数据 | 很多论文 Info 字段为空或不准确 |
+| 自定义字体编码 | 提取出乱码或空文本 |
 
 ## 今日算法题
 

@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"wolfden.website/papermind/internal/model"
+	"wolfden.website/papermind/internal/pkg/extractor"
+	"wolfden.website/papermind/internal/pkg/parser"
 	"wolfden.website/papermind/internal/repository"
 )
 
@@ -90,6 +94,9 @@ func (s *PaperService) UploadPaper(ctx context.Context, userID string, input Upl
 		return nil, err
 	}
 
+	// 启动异步处理（不阻塞上传响应）
+	go s.processPaper(paper.ID, filePath)
+
 	return toPaperDTO(paper), nil
 }
 
@@ -166,6 +173,83 @@ func (s *PaperService) Delete(ctx context.Context, userID, paperID string) error
 	os.Remove(filePath) // 忽略文件删除失败（文件可能不存在）
 
 	return nil
+}
+
+// 论文上传后的异步处理流水线
+func (s *PaperService) processPaper(paperID uuid.UUID, filePath string) {
+	// 防止 panic 扩散
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("处理论文 %s 时发生 panic: %v", paperID, r)
+			s.updateStatus(context.Background(), paperID, "failed")
+		}
+	}()
+
+	// 使用 background context，因为请求可能已经结束
+	ctx := context.Background()
+
+	// ========== 阶段 1: 文本提取 ==========
+	s.updateStatus(ctx, paperID, "extracting")
+
+	pdfContent, err := extractor.ExtractPDF(filePath)
+	if err != nil {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s PDF 提取失败: %v", paperID, err)
+		return
+	}
+
+	// 检查是否提取出了有效文本
+	if strings.TrimSpace(pdfContent.FullText) == "" {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s PDF 未提取出文本（可能是扫描件）", paperID)
+		return
+	}
+
+	// 用提取到的元数据更新论文记录
+	s.updateMetadataFromPDF(ctx, paperID, pdfContent.Metadata)
+
+	// ========== 阶段 2: 结构解析 ==========
+	s.updateStatus(ctx, paperID, "parsing")
+
+	sections := parser.ParseSections(pdfContent.Pages)
+
+	// 打印解析结果到日志
+	log.Printf("论文 %s 解析完成，识别出 %d 个章节:", paperID, len(sections))
+	for i, sec := range sections {
+		log.Printf("  [%d] type=%s, title=%s, page=%d, contentLen=%d",
+			i, sec.Type, sec.Title, sec.StartPage, len(sec.Content))
+	}
+
+	// ========== 阶段 3: 切片 + Embedding（后续实现）==========
+	// s.updateStatus(ctx, paperID, "chunking")
+	// s.updateStatus(ctx, paperID, "embedding")
+
+	// 临时：直接标记为 completed
+	s.updateStatus(ctx, paperID, "completed")
+}
+
+// updateStatus 更新论文的处理状态
+func (s *PaperService) updateStatus(ctx context.Context, paperID uuid.UUID, status string) {
+	err := s.paperRepo.UpdateStatus(ctx, paperID, status)
+	if err != nil {
+		log.Printf("更新论文 %s 状态为 %s 失败: %v", paperID, status, err)
+	}
+}
+
+// updateMetadataFromPDF 用 PDF 元数据更新论文记录
+func (s *PaperService) updateMetadataFromPDF(ctx context.Context, paperID uuid.UUID, meta extractor.PDFMetadata) {
+	updates := make(map[string]interface{})
+
+	if meta.Title != "" {
+		updates["title"] = meta.Title
+	}
+	if meta.Author != "" {
+		updates["authors"] = meta.Author
+	}
+
+	if len(updates) > 0 {
+		s.paperRepo.UpdateMetadataIfEmpty(ctx, paperID, updates)
+	}
 }
 
 func toPaperDTO(paper *model.Paper) *PaperDTO {

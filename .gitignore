@@ -80,3 +80,5 @@ temp/
 # ==================== Project Specific ====================
 # SQL IDE configs (contains local database connections)
 sql/.idea/
+
+uploads/
