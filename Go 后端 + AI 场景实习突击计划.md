@@ -97,9 +97,9 @@
 
 **Day 6-7：骨架搭建**
 
-- [ ] 初始化 Go 项目，搭建 Gin + GORM 脚手架
+- [x] 初始化 Go 项目，搭建 Gin + GORM 脚手架
 - [ ] 设计数据库表结构：`users`、`documents`、`chunks`（含向量字段）、`conversations`、`messages`
-- [ ] 实现文件上传接口（支持 PDF / Markdown）
+- [x] 实现文件上传接口（支持 PDF / Markdown）
 - [ ] 实现文本提取逻辑（PDF 用 Go 的 PDF 解析库）
 
 **Day 8-9：核心 RAG Pipeline**

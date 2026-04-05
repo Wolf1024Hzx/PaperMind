@@ -19,6 +19,7 @@ type Config struct {
 	RedisAddr        string
 	RedisPassword    string
 	RedisDB          int
+	UploadDir        string
 }
 
 func Load() Config {
@@ -35,6 +36,7 @@ func Load() Config {
 		RedisAddr:        getEnv("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:    getEnv("REDIS_PASSWORD", "Wolf1024!"),
 		RedisDB:          0,
+		UploadDir:        getEnv("UPLOAD_DIR", "./uploads/papers"),
 	}
 }
 

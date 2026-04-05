@@ -104,6 +104,47 @@ RedisService
 
 验证：登录后 token 存入 Redis，登出后删除，中间件正常工作。
 
+## 今日算法题
+
+时间太晚了，随便打一道最简单的（今天开始 Hot 100 计划，每天一题）
+
+[两数之和](https://leetcode.cn/problems/two-sum/description/?envType=study-plan-v2&envId=top-100-liked)
+
+记得用哈希表，可以实现 O(N)
+
+用 Go 手写了一个快排，在 Goland 里 Debug 了一会
+
+```go
+func quickSort(nums []int, leftIdx, rightIdx int) {
+	if leftIdx >= rightIdx {
+		return
+	}
+	base := nums[leftIdx]
+	leftPointer, rightPointer := leftIdx, rightIdx
+	for leftPointer < rightPointer {
+		for rightPointer > leftPointer && nums[rightPointer] > base {
+			rightPointer--
+		}
+		if leftPointer < rightPointer {
+			nums[leftPointer] = nums[rightPointer]
+			leftPointer++
+		}
+		for leftPointer < rightPointer && nums[leftPointer] <= base {
+			leftPointer++
+		}
+		if leftPointer < rightPointer {
+			nums[rightPointer] = nums[leftPointer]
+			rightPointer--
+		}
+	}
+	nums[leftPointer] = base
+	quickSort(nums, leftIdx, leftPointer-1)
+	quickSort(nums, rightPointer+1, rightIdx)
+}
+```
+
+丢给豆包专家模式说没有问题
+
 ## 今日总结
 
 **收获：**

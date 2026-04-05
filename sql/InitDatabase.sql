@@ -3,6 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 SELECT extname FROM pg_extension;
 
+-- users 表
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     username    VARCHAR(64)  NOT NULL UNIQUE,
@@ -11,3 +12,34 @@ CREATE TABLE users (
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMP    NOT NULL DEFAULT NOW()
 );
+
+-- papers 表（论文元数据 + 文件信息 + 处理状态）
+CREATE TABLE papers (
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id      UUID         NOT NULL REFERENCES users(id),
+
+    -- 文件信息
+    filename     VARCHAR(256) NOT NULL,          -- 原始文件名
+    file_size    BIGINT       NOT NULL,          -- 字节数
+    file_hash    VARCHAR(64)  NOT NULL,          -- SHA-256，用于去重
+
+    -- 论文元数据（后续功能的区分度关键）
+    title        VARCHAR(512),                   -- 论文标题（从 PDF 提取或用户手动填写）
+    authors      VARCHAR(512),                   -- 作者列表，逗号分隔
+    year         INT,                            -- 发表年份
+    venue        VARCHAR(256),                   -- 发表会议/期刊（如 NeurIPS 2024）
+    abstract     TEXT,                           -- 摘要（从论文提取）
+
+    -- 处理状态
+    chunk_count  INT          NOT NULL DEFAULT 0,
+    status       VARCHAR(32)  NOT NULL DEFAULT 'pending',
+    -- status 枚举: pending → extracting → chunking → embedding → completed → failed
+
+    created_at   TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+-- 索引
+CREATE INDEX idx_papers_user_id ON papers(user_id);
+CREATE INDEX idx_papers_file_hash ON papers(file_hash);    -- 去重检查
+CREATE INDEX idx_papers_year ON papers(year);               -- 支持按年份筛选检索范围

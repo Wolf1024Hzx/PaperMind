@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -55,17 +56,30 @@ func main() {
 	// 创建 RedisService（带前缀）
 	authRedis := service.NewRedisService(redisClient, "papermind:auth:")
 
+	// Repository
 	userRepo := repository.NewUserRepository(db)
+	paperRepo := repository.NewPaperRepository(db)
+
+	// Service
 	authService := service.NewAuthService(userRepo, authRedis, cfg.JWTSecret, cfg.JWTTTL)
 
+	// 确保上传目录存在
+	if err := os.MkdirAll(cfg.UploadDir, 0755); err != nil {
+		log.Fatalf("创建上传目录失败: %v", err)
+	}
+	paperService := service.NewPaperService(paperRepo, cfg.UploadDir)
+
+	// Handler
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler(authService)
+	paperHandler := handler.NewPaperHandler(paperService)
 
 	router := gin.Default()
 	healthHandler.RegisterRoutes(router)
 
 	api := router.Group("/api/v1")
 	authHandler.RegisterRoutes(api, authRedis, []byte(cfg.JWTSecret), cfg.JWTTTL)
+	paperHandler.RegisterRoutes(api, authRedis, []byte(cfg.JWTSecret), cfg.JWTTTL)
 
 	log.Printf("HTTP 服务启动成功，监听地址 %s", cfg.HTTPAddr)
 	if err := router.Run(cfg.HTTPAddr); err != nil {

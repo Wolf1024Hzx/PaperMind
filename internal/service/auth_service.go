@@ -15,12 +15,6 @@ import (
 	"wolfden.website/papermind/internal/repository"
 )
 
-var (
-	ErrInvalidCredentials = errors.New("用户名或密码错误")
-	ErrInvalidInput       = errors.New("请求参数不合法")
-	ErrUserAlreadyExists  = errors.New("用户名或邮箱已存在")
-)
-
 type AuthService struct {
 	userRepo     *repository.UserRepository
 	redisService *RedisService
