@@ -116,6 +116,32 @@
 | `GET /api/v1/papers/:id` (详情) | ✅ |
 | `DELETE /api/v1/papers/:id` | ✅ |
 
+### Markdown 上传通道（新增）
+
+**背景：** PDF 文本提取质量差是行业难题，添加 Markdown 作为替代方案。
+
+**改动文件：**
+
+| 文件 | 说明 |
+|------|------|
+| `pkg/common/section_type.go` | 新增，Section 结构体 + 类型常量 + MatchSectionType |
+| `parser/section_parser.go` | 改用 common 包 |
+| `extractor/markdown.go` | 新增，Markdown/.txt 提取 + 章节识别 |
+| `handler/paper.go` | 放宽校验，允许 .md/.txt |
+| `service/paper_service.go` | 按扩展名分支处理 |
+
+**处理流程：**
+
+```
+上传入口 → 判断扩展名 → PDF: ExtractPDF → ParseSections
+                      → Markdown: ExtractMarkdown → []Section（一步完成）
+                      → .txt: 按空行切分段落
+```
+
+**设计要点：**
+- `Section` 结构体移到 common 包避免循环依赖
+- Markdown `#` `##` `###` 直接标识章节，识别准确率接近 100%
+
 ## 遇到的问题
 
 ### 1. PDF 文本提取单词粘连
@@ -145,3 +171,36 @@ ledongthuc/pdf 库 `GetTextByRow()` 返回单词无空格，尝试根据标点�
 [移动零](https://leetcode.cn/problems/move-zeroes/description/?envType=study-plan-v2&envId=top-100-liked)
 
 [无重复字符的最长子串](https://leetcode.cn/problems/longest-substring-without-repeating-characters/description/?envType=study-plan-v2&envId=top-100-liked)
+
+## 今日总结
+
+**收获：**
+
+1. GORM 查询方法：`First` 写入单个实体，`Find` 写入切片，`Updates` 需配合 `Model`
+2. Gin 文件上传：`c.FormFile("file")` + `file.Open()` + 读取字节
+3. SHA-256 文件哈希去重：`sha256.Sum256()` + `hex.EncodeToString()`
+4. Goroutine 异步处理：使用 `context.Background()` 防止请求结束导致 ctx 失效
+5. defer/recover 防止 panic 扩散到主进程
+6. Go 循环依赖解决：把共享类型（如 Section）移到独立的 common 包
+
+**实现功能：**
+
+- 论文 CRUD（上传、列表、详情、删除）
+- PDF 文本提取 + 章节结构解析（异步流水线）
+- Markdown/.txt 上传通道（替代 PDF 提取质量差的问题）
+
+**问题与解决：**
+
+- PDF 单词粘连 → 添加 Markdown 上传通道绕过问题
+- 循环依赖 → Section 结构体移到 common 包
+- 章节类型判断重复 → MatchSectionType 移到 common 包复用
+
+**工程判断：**
+
+PDF 解析质量差是行业已知难题，不是代码 bug。务实方案：添加 Markdown 通道，快速推进核心 RAG Pipeline。面试时诚实说明：系统支持两种输入格式，复杂排版可手动整理成 Markdown。
+
+## 后续计划
+
+- 实现文本切片（Chunking）
+- 实现 Embedding 向量化
+- 实现向量检索（pgvector）

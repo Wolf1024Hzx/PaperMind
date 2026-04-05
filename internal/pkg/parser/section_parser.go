@@ -5,27 +5,9 @@ import (
 	"regexp"
 	"strings"
 
+	"wolfden.website/papermind/internal/pkg/common"
 	"wolfden.website/papermind/internal/pkg/extractor"
 )
-
-// Section 表示论文中的一个章节
-type Section struct {
-	Type      string // abstract / introduction / related_work / method / experiment / conclusion / other
-	Title     string // 原始章节标题文本，如 "3.2 Multi-Head Attention"
-	Content   string // 该章节的全部文本内容
-	StartPage int    // 该章节起始页码
-}
-
-// sectionKeywords 定义了论文章节类型与关键词的映射
-var sectionKeywords = map[string][]string{
-	"abstract":     {"abstract"},
-	"introduction": {"introduction", "intro"},
-	"related_work": {"related work", "background", "literature review", "prior work", "preliminary", "preliminaries"},
-	"method":       {"method", "methodology", "approach", "proposed method", "model", "framework", "architecture", "our approach", "proposed approach", "system design"},
-	"experiment":   {"experiment", "evaluation", "results", "empirical", "setup", "experimental setup", "experimental results"},
-	"discussion":   {"discussion", "analysis", "ablation"},
-	"conclusion":   {"conclusion", "summary", "future work", "concluding remarks"},
-}
 
 // headingPattern 匹配常见的论文章节标题格式
 var headingPattern = regexp.MustCompile(
@@ -45,7 +27,7 @@ var noNumberKeywords = map[string]bool{
 }
 
 // ParseSections 将逐页文本解析为结构化的章节列表
-func ParseSections(pages []extractor.PageText) []Section {
+func ParseSections(pages []extractor.PageText) []common.Section {
 	// 把所有页的文本按行合并，同时记录每行属于哪一页
 	type lineInfo struct {
 		text       string
@@ -68,8 +50,8 @@ func ParseSections(pages []extractor.PageText) []Section {
 
 	if len(allLines) == 0 {
 		// 整个 PDF 没有提取出任何文本
-		return []Section{{
-			Type:      "other",
+		return []common.Section{{
+			Type:      common.TypeOther,
 			Title:     "Full Document",
 			Content:   "",
 			StartPage: 1,
@@ -102,7 +84,7 @@ func ParseSections(pages []extractor.PageText) []Section {
 		}
 
 		if isLikelyHeading(trimmed) {
-			sectionType := matchSectionType(trimmed)
+			sectionType := common.MatchSectionType(trimmed)
 			headings = append(headings, headingInfo{
 				title:       trimmed,
 				sectionType: sectionType,
@@ -119,8 +101,8 @@ func ParseSections(pages []extractor.PageText) []Section {
 			fullText.WriteString(line.text)
 			fullText.WriteString("\n")
 		}
-		return []Section{{
-			Type:      "other",
+		return []common.Section{{
+			Type:      common.TypeOther,
 			Title:     "Full Document",
 			Content:   strings.TrimSpace(fullText.String()),
 			StartPage: 1,
@@ -128,7 +110,7 @@ func ParseSections(pages []extractor.PageText) []Section {
 	}
 
 	// 根据标题位置切分内容
-	var sections []Section
+	var sections []common.Section
 
 	// 处理第一个标题之前的内容（如果有的话）
 	if headings[0].lineIndex > 0 {
@@ -139,8 +121,8 @@ func ParseSections(pages []extractor.PageText) []Section {
 		}
 		text := strings.TrimSpace(preContent.String())
 		if text != "" {
-			sections = append(sections, Section{
-				Type:      "other",
+			sections = append(sections, common.Section{
+				Type:      common.TypeOther,
 				Title:     "Preamble",
 				Content:   text,
 				StartPage: allLines[0].pageNumber,
@@ -163,7 +145,7 @@ func ParseSections(pages []extractor.PageText) []Section {
 			contentBuilder.WriteString("\n")
 		}
 
-		sections = append(sections, Section{
+		sections = append(sections, common.Section{
 			Type:      heading.sectionType,
 			Title:     heading.title,
 			Content:   strings.TrimSpace(contentBuilder.String()),
@@ -172,21 +154,6 @@ func ParseSections(pages []extractor.PageText) []Section {
 	}
 
 	return sections
-}
-
-// matchSectionType 将标题文本匹配到对应的 section type
-func matchSectionType(title string) string {
-	lowerTitle := strings.ToLower(strings.TrimSpace(title))
-
-	for sectionType, keywords := range sectionKeywords {
-		for _, keyword := range keywords {
-			if strings.Contains(lowerTitle, keyword) {
-				return sectionType
-			}
-		}
-	}
-
-	return "other"
 }
 
 // isLikelyHeading 判断一行文本是否可能是章节标题

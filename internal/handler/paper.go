@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -42,9 +44,9 @@ func (h *PaperHandler) UploadPaper(c *gin.Context) {
 		return
 	}
 
-	// 校验文件类型（只允许 PDF）
-	if !isPDFFile(file.Filename) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "只支持 PDF 文件"})
+	// 校验文件类型（只允许 PDF、Markdown、纯文本）
+	if !isAllowedFile(file.Filename) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "只支持 PDF、Markdown (.md) 和纯文本 (.txt) 文件"})
 		return
 	}
 
@@ -157,6 +159,7 @@ func (h *PaperHandler) handleServiceError(c *gin.Context, err error) {
 	}
 }
 
-func isPDFFile(filename string) bool {
-	return len(filename) > 4 && filename[len(filename)-4:] == ".pdf"
+func isAllowedFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	return ext == ".pdf" || ext == ".md" || ext == ".txt"
 }

@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"wolfden.website/papermind/internal/model"
+	"wolfden.website/papermind/internal/pkg/common"
 	"wolfden.website/papermind/internal/pkg/extractor"
 	"wolfden.website/papermind/internal/pkg/parser"
 	"wolfden.website/papermind/internal/repository"
@@ -86,8 +88,9 @@ func (s *PaperService) UploadPaper(ctx context.Context, userID string, input Upl
 		return nil, err
 	}
 
-	// 再保存文件
-	filePath := fmt.Sprintf("%s/%s.pdf", s.uploadDir, paper.ID.String())
+	// 再保存文件（使用原始扩展名）
+	ext := filepath.Ext(input.Filename)
+	filePath := fmt.Sprintf("%s/%s%s", s.uploadDir, paper.ID.String(), ext)
 	if err := os.WriteFile(filePath, input.FileData, 0644); err != nil {
 		// 文件保存失败，删除数据库记录（补偿操作）
 		s.paperRepo.DeletePaper(ctx, paper.ID)
@@ -168,9 +171,11 @@ func (s *PaperService) Delete(ctx context.Context, userID, paperID string) error
 		return err
 	}
 
-	// 删除文件
-	filePath := fmt.Sprintf("%s/%s.pdf", s.uploadDir, paperUUID.String())
-	os.Remove(filePath) // 忽略文件删除失败（文件可能不存在）
+	// 删除文件（尝试所有可能的扩展名）
+	for _, ext := range []string{".pdf", ".md", ".txt"} {
+		filePath := fmt.Sprintf("%s/%s%s", s.uploadDir, paperUUID.String(), ext)
+		os.Remove(filePath)
+	}
 
 	return nil
 }
@@ -188,30 +193,26 @@ func (s *PaperService) processPaper(paperID uuid.UUID, filePath string) {
 	// 使用 background context，因为请求可能已经结束
 	ctx := context.Background()
 
-	// ========== 阶段 1: 文本提取 ==========
-	s.updateStatus(ctx, paperID, "extracting")
+	// 根据文件扩展名选择处理路径
+	ext := strings.ToLower(filepath.Ext(filePath))
 
-	pdfContent, err := extractor.ExtractPDF(filePath)
-	if err != nil {
+	var sections []common.Section
+
+	switch ext {
+	case ".pdf":
+		sections = s.processPDF(ctx, filePath, paperID)
+	case ".md", ".txt":
+		sections = s.processMarkdown(ctx, filePath, paperID)
+	default:
 		s.updateStatus(ctx, paperID, "failed")
-		log.Printf("论文 %s PDF 提取失败: %v", paperID, err)
+		log.Printf("论文 %s 不支持的文件类型: %s", paperID, ext)
 		return
 	}
 
-	// 检查是否提取出了有效文本
-	if strings.TrimSpace(pdfContent.FullText) == "" {
+	if len(sections) == 0 {
 		s.updateStatus(ctx, paperID, "failed")
-		log.Printf("论文 %s PDF 未提取出文本（可能是扫描件）", paperID)
 		return
 	}
-
-	// 用提取到的元数据更新论文记录
-	s.updateMetadataFromPDF(ctx, paperID, pdfContent.Metadata)
-
-	// ========== 阶段 2: 结构解析 ==========
-	s.updateStatus(ctx, paperID, "parsing")
-
-	sections := parser.ParseSections(pdfContent.Pages)
 
 	// 打印解析结果到日志
 	log.Printf("论文 %s 解析完成，识别出 %d 个章节:", paperID, len(sections))
@@ -226,6 +227,56 @@ func (s *PaperService) processPaper(paperID uuid.UUID, filePath string) {
 
 	// 临时：直接标记为 completed
 	s.updateStatus(ctx, paperID, "completed")
+}
+
+// processPDF 提取 PDF 并解析章节
+func (s *PaperService) processPDF(ctx context.Context, filePath string, paperID uuid.UUID) []common.Section {
+	s.updateStatus(ctx, paperID, "extracting")
+
+	pdfContent, err := extractor.ExtractPDF(filePath)
+	if err != nil {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s PDF 提取失败: %v", paperID, err)
+		return nil
+	}
+
+	// 检查是否提取出了有效文本
+	if strings.TrimSpace(pdfContent.FullText) == "" {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s PDF 未提取出文本（可能是扫描件）", paperID)
+		return nil
+	}
+
+	// 用提取到的元数据更新论文记录
+	s.updateMetadataFromPDF(ctx, paperID, pdfContent.Metadata)
+
+	s.updateStatus(ctx, paperID, "parsing")
+	return parser.ParseSections(pdfContent.Pages)
+}
+
+// processMarkdown 提取 Markdown/文本并解析章节
+func (s *PaperService) processMarkdown(ctx context.Context, filePath string, paperID uuid.UUID) []common.Section {
+	s.updateStatus(ctx, paperID, "extracting")
+
+	mdContent, err := extractor.ExtractMarkdown(filePath)
+	if err != nil {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s Markdown 提取失败: %v", paperID, err)
+		return nil
+	}
+
+	// 用提取到的元数据更新论文记录
+	s.updateMetadataFromMarkdown(ctx, paperID, mdContent.Metadata)
+
+	s.updateStatus(ctx, paperID, "parsing")
+	return mdContent.Sections
+}
+
+// updateMetadataFromMarkdown 用 Markdown 元数据更新论文记录
+func (s *PaperService) updateMetadataFromMarkdown(ctx context.Context, paperID uuid.UUID, meta extractor.MarkdownMetadata) {
+	if meta.Title != "" {
+		s.paperRepo.UpdateMetadataIfEmpty(ctx, paperID, map[string]interface{}{"title": meta.Title})
+	}
 }
 
 // updateStatus 更新论文的处理状态
