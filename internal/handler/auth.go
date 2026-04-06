@@ -9,28 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"wolfden.website/papermind/internal/dto"
 	"wolfden.website/papermind/internal/middleware"
 	"wolfden.website/papermind/internal/service"
 )
 
 type AuthHandler struct {
 	authService *service.AuthService
-}
-
-type registerRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type loginRequest struct {
-	Account  string `json:"account"`
-	Password string `json:"password"`
-}
-
-type updateCurrentUserRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
 }
 
 func NewAuthHandler(authService *service.AuthService) *AuthHandler {
@@ -51,17 +36,13 @@ func (h *AuthHandler) RegisterRoutes(router *gin.RouterGroup, redisService *serv
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
-	var request registerRequest
+	var request dto.RegisterRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "请求体格式错误"})
 		return
 	}
 
-	profile, err := h.authService.Register(c.Request.Context(), service.RegisterInput{
-		Username: request.Username,
-		Email:    request.Email,
-		Password: request.Password,
-	})
+	profile, err := h.authService.Register(c.Request.Context(), request)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
@@ -71,16 +52,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
-	var request loginRequest
+	var request dto.LoginRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "请求体格式错误"})
 		return
 	}
 
-	result, err := h.authService.Login(c.Request.Context(), service.LoginInput{
-		Account:  request.Account,
-		Password: request.Password,
-	})
+	result, err := h.authService.Login(c.Request.Context(), request)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return
@@ -101,17 +79,14 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 }
 
 func (h *AuthHandler) UpdateCurrentUser(c *gin.Context) {
-	var request updateCurrentUserRequest
+	var request dto.UpdateCurrentUserRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "请求体格式错误"})
 		return
 	}
 
 	userID := c.GetString(middleware.CurrentUserIDKey)
-	result, err := h.authService.UpdateCurrentUser(c.Request.Context(), userID, service.UpdateCurrentUserInput{
-		Username: request.Username,
-		Email:    request.Email,
-	})
+	result, err := h.authService.UpdateCurrentUser(c.Request.Context(), userID, request)
 	if err != nil {
 		h.handleServiceError(c, err)
 		return

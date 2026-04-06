@@ -23,20 +23,25 @@ type Container struct {
 	redisClient *redis.Client
 
 	// Repositories
-	userRepo  *repository.UserRepository
-	paperRepo *repository.PaperRepository
-	chunkRepo *repository.ChunkRepository
+	userRepo         *repository.UserRepository
+	paperRepo        *repository.PaperRepository
+	chunkRepo        *repository.ChunkRepository
+	vectorRepo       *repository.VectorRepository
+	conversationRepo *repository.ConversationRepository
 
 	// Services
 	authRedis       *service.RedisService
 	authService     *service.AuthService
 	paperService    *service.PaperService
 	embeddingClient service.EmbeddingClient
+	llmClient       service.LLMClient
+	chatService     *service.ChatService
 
 	// Handlers
 	healthHandler *handler.HealthHandler
 	authHandler   *handler.AuthHandler
 	paperHandler  *handler.PaperHandler
+	chatHandler   *handler.ChatHandler
 
 	// Config
 	config *config.Config
@@ -107,6 +112,8 @@ func (c *Container) initRepositories() {
 	c.userRepo = repository.NewUserRepository(c.db)
 	c.paperRepo = repository.NewPaperRepository(c.db)
 	c.chunkRepo = repository.NewChunkRepository(c.db)
+	c.vectorRepo = repository.NewVectorRepository(c.db)
+	c.conversationRepo = repository.NewConversationRepository(c.db)
 }
 
 // initServices 初始化所有 Service
@@ -132,6 +139,21 @@ func (c *Container) initServices() {
 		log.Fatalf("不支持的 EMBEDDING_TYPE: %s (可选: mock, qwen)", c.config.EmbeddingType)
 	}
 
+	// LLM Client（根据 LLMType 决定使用哪个实现）
+	switch c.config.LLMType {
+	case "qwen":
+		if c.config.AliYunAPIKey == "" {
+			log.Fatal("LLM_TYPE=qwen 但未配置 ALIYUN_API_KEY")
+		}
+		log.Printf("使用阿里云 LLM API，模型: %s", c.config.LLMModel)
+		c.llmClient = service.NewQwenLLMClient(c.config.AliYunAPIKey, c.config.LLMModel)
+	case "mock":
+		log.Println("使用 Mock LLM（仅供测试）")
+		c.llmClient = service.NewMockLLMClient("这是一个 Mock 回复，用于测试目的。")
+	default:
+		log.Fatalf("不支持的 LLM_TYPE: %s (可选: mock, qwen)", c.config.LLMType)
+	}
+
 	// 确保上传目录存在
 	if err := os.MkdirAll(c.config.UploadDir, 0755); err != nil {
 		log.Fatalf("创建上传目录失败: %v", err)
@@ -146,6 +168,16 @@ func (c *Container) initServices() {
 		c.config.EmbeddingBatchSize,
 		c.config.EmbeddingMaxConcurrency,
 	)
+
+	// Chat Service
+	c.chatService = service.NewChatService(
+		c.vectorRepo,
+		c.conversationRepo,
+		c.embeddingClient,
+		c.llmClient,
+		c.config.RetrievalTopKExtract,
+		c.config.RetrievalTopKCompare,
+	)
 }
 
 // initHandlers 初始化所有 Handler
@@ -153,6 +185,7 @@ func (c *Container) initHandlers() {
 	c.healthHandler = handler.NewHealthHandler()
 	c.authHandler = handler.NewAuthHandler(c.authService)
 	c.paperHandler = handler.NewPaperHandler(c.paperService)
+	c.chatHandler = handler.NewChatHandler(c.chatService, c.conversationRepo)
 }
 
 // RegisterRoutes 注册所有路由
@@ -162,6 +195,7 @@ func (c *Container) RegisterRoutes(router *gin.Engine) {
 	api := router.Group("/api/v1")
 	c.authHandler.RegisterRoutes(api, c.authRedis, []byte(c.config.JWTSecret), c.config.JWTTTL)
 	c.paperHandler.RegisterRoutes(api, c.authRedis, []byte(c.config.JWTSecret), c.config.JWTTTL)
+	c.chatHandler.RegisterRoutes(api, c.authRedis, []byte(c.config.JWTSecret), c.config.JWTTTL)
 }
 
 // Close 关闭所有连接

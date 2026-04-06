@@ -68,3 +68,29 @@ CREATE INDEX idx_chunks_embedding ON chunks
 -- 业务索引
 CREATE INDEX idx_chunks_paper_id ON chunks(paper_id);
 CREATE INDEX idx_chunks_section_type ON chunks(section_type);
+
+-- conversations 表
+CREATE TABLE conversations (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID         NOT NULL REFERENCES users(id),
+    title       VARCHAR(256),
+    mode        VARCHAR(32)  NOT NULL DEFAULT 'extract',
+    created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMP    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conversations_user_id ON conversations(user_id);
+
+-- messages 表
+CREATE TABLE messages (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID        NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role            VARCHAR(16) NOT NULL,
+    content         TEXT        NOT NULL,
+    references_data JSONB,
+    token_usage     JSONB,
+    created_at      TIMESTAMP   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
+

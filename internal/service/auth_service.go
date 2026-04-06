@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"wolfden.website/papermind/internal/dto"
 	"wolfden.website/papermind/internal/model"
 	"wolfden.website/papermind/internal/repository"
 )
@@ -20,35 +21,6 @@ type AuthService struct {
 	redisService *RedisService
 	jwtSecret    []byte
 	jwtTTL       time.Duration
-}
-
-type RegisterInput struct {
-	Username string
-	Email    string
-	Password string
-}
-
-type LoginInput struct {
-	Account  string
-	Password string
-}
-
-type UpdateCurrentUserInput struct {
-	Username string
-	Email    string
-}
-
-type AuthResult struct {
-	Token string      `json:"token"`
-	User  UserProfile `json:"user"`
-}
-
-type UserProfile struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type TokenClaims struct {
@@ -66,7 +38,7 @@ func NewAuthService(userRepo *repository.UserRepository, redisService *RedisServ
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*UserProfile, error) {
+func (s *AuthService) Register(ctx context.Context, input dto.RegisterRequest) (*dto.UserProfile, error) {
 	input.Username = strings.TrimSpace(input.Username)
 	input.Email = strings.TrimSpace(input.Email)
 	if input.Username == "" || input.Email == "" || input.Password == "" {
@@ -96,7 +68,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (*UserP
 	return &profile, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, input LoginInput) (*AuthResult, error) {
+func (s *AuthService) Login(ctx context.Context, input dto.LoginRequest) (*dto.AuthResult, error) {
 	input.Account = strings.TrimSpace(input.Account)
 	if input.Account == "" || input.Password == "" {
 		return nil, ErrInvalidInput
@@ -120,13 +92,13 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (*AuthResult,
 		return nil, err
 	}
 
-	return &AuthResult{
+	return &dto.AuthResult{
 		Token: token,
 		User:  toUserProfile(user),
 	}, nil
 }
 
-func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*UserProfile, error) {
+func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*dto.UserProfile, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, ErrInvalidInput
@@ -141,7 +113,7 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*UserP
 	return &profile, nil
 }
 
-func (s *AuthService) UpdateCurrentUser(ctx context.Context, userID string, input UpdateCurrentUserInput) (*UserProfile, error) {
+func (s *AuthService) UpdateCurrentUser(ctx context.Context, userID string, input dto.UpdateCurrentUserRequest) (*dto.UserProfile, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, ErrInvalidInput
@@ -215,8 +187,8 @@ func (s *AuthService) Logout(ctx context.Context, tokenString string) error {
 	return s.redisService.Del(ctx, tokenString)
 }
 
-func toUserProfile(user *model.User) UserProfile {
-	return UserProfile{
+func toUserProfile(user *model.User) dto.UserProfile {
+	return dto.UserProfile{
 		ID:        user.ID.String(),
 		Username:  user.Username,
 		Email:     user.Email,

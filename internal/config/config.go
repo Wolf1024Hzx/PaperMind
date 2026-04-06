@@ -27,6 +27,10 @@ type Config struct {
 	EmbeddingModel          string // Embedding 模型名称
 	EmbeddingBatchSize      int    // Embedding API 单次请求最大条数
 	EmbeddingMaxConcurrency int    // Embedding API 最大并发请求数
+	LLMType                 string // LLM 类型：mock / qwen
+	LLMModel                string // LLM 模型名称
+	RetrievalTopKExtract    int    // 提取模式检索数量
+	RetrievalTopKCompare    int    // 对比模式检索数量
 }
 
 func Load() Config {
@@ -52,6 +56,10 @@ func Load() Config {
 		EmbeddingModel:          getEnv("EMBEDDING_MODEL", "qwen3-vl-embedding"),
 		EmbeddingBatchSize:      getEnvInt("EMBEDDING_BATCH_SIZE", 20),
 		EmbeddingMaxConcurrency: getEnvInt("EMBEDDING_MAX_CONCURRENCY", 4),
+		LLMType:                 getEnv("LLM_TYPE", "qwen"),
+		LLMModel:                getEnv("LLM_MODEL", "qwen3.5-plus"),
+		RetrievalTopKExtract:    getEnvInt("RETRIEVAL_TOP_K_EXTRACT", 5),
+		RetrievalTopKCompare:    getEnvInt("RETRIEVAL_TOP_K_COMPARE", 10),
 	}
 }
 

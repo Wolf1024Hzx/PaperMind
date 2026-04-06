@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"wolfden.website/papermind/internal/dto"
 	"wolfden.website/papermind/internal/middleware"
 	"wolfden.website/papermind/internal/service"
 )
@@ -87,7 +88,7 @@ func (h *PaperHandler) UploadPaper(c *gin.Context) {
 		}
 	}
 
-	input := service.UploadPaperInput{
+	input := dto.UploadPaperInput{
 		Filename: file.Filename,
 		FileData: fileData,
 		FileSize: file.Size,

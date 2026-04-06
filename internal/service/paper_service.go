@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
+	"wolfden.website/papermind/internal/dto"
 	"wolfden.website/papermind/internal/model"
 	"wolfden.website/papermind/internal/pkg/chunker"
 	"wolfden.website/papermind/internal/pkg/common"
@@ -21,31 +22,6 @@ import (
 	"wolfden.website/papermind/internal/pkg/parser"
 	"wolfden.website/papermind/internal/repository"
 )
-
-type UploadPaperInput struct {
-	Filename string
-	FileData []byte
-	FileSize int64
-	FileHash string
-	Title    string
-	Authors  string
-	Year     *int
-	Venue    string
-}
-
-type PaperDTO struct {
-	ID         string `json:"id"`
-	Filename   string `json:"filename"`
-	FileSize   int64  `json:"fileSize"`
-	Title      string `json:"title"`
-	Authors    string `json:"authors"`
-	Year       *int   `json:"year"`
-	Venue      string `json:"venue"`
-	Status     string `json:"status"`
-	ChunkCount int    `json:"chunkCount"`
-	CreatedAt  string `json:"createdAt"`
-	UpdatedAt  string `json:"updatedAt"`
-}
 
 type PaperService struct {
 	paperRepo               *repository.PaperRepository
@@ -74,7 +50,7 @@ func NewPaperService(
 	}
 }
 
-func (s *PaperService) UploadPaper(ctx context.Context, userID string, input UploadPaperInput) (*PaperDTO, error) {
+func (s *PaperService) UploadPaper(ctx context.Context, userID string, input dto.UploadPaperInput) (*dto.PaperDTO, error) {
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, ErrInvalidInput
@@ -121,7 +97,7 @@ func (s *PaperService) UploadPaper(ctx context.Context, userID string, input Upl
 	return toPaperDTO(paper), nil
 }
 
-func (s *PaperService) ListByUser(ctx context.Context, userID string) ([]PaperDTO, error) {
+func (s *PaperService) ListByUser(ctx context.Context, userID string) ([]dto.PaperDTO, error) {
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, ErrInvalidInput
@@ -130,14 +106,14 @@ func (s *PaperService) ListByUser(ctx context.Context, userID string) ([]PaperDT
 	if err != nil {
 		return nil, err
 	}
-	result := []PaperDTO{}
+	result := []dto.PaperDTO{}
 	for _, paper := range papers {
 		result = append(result, *toPaperDTO(&paper))
 	}
 	return result, nil
 }
 
-func (s *PaperService) GetByID(ctx context.Context, userID, paperID string) (*PaperDTO, error) {
+func (s *PaperService) GetByID(ctx context.Context, userID, paperID string) (*dto.PaperDTO, error) {
 	paperUUID, err := uuid.Parse(paperID)
 	if err != nil {
 		return nil, ErrInvalidInput
@@ -394,8 +370,8 @@ func (s *PaperService) updateMetadataFromPDF(ctx context.Context, paperID uuid.U
 	}
 }
 
-func toPaperDTO(paper *model.Paper) *PaperDTO {
-	return &PaperDTO{
+func toPaperDTO(paper *model.Paper) *dto.PaperDTO {
+	return &dto.PaperDTO{
 		ID:         paper.ID.String(),
 		Filename:   paper.Filename,
 		FileSize:   paper.FileSize,
