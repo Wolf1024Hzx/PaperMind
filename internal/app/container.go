@@ -28,9 +28,9 @@ type Container struct {
 	chunkRepo *repository.ChunkRepository
 
 	// Services
-	authRedis     *service.RedisService
-	authService   *service.AuthService
-	paperService  *service.PaperService
+	authRedis       *service.RedisService
+	authService     *service.AuthService
+	paperService    *service.PaperService
 	embeddingClient service.EmbeddingClient
 
 	// Handlers
@@ -117,8 +117,20 @@ func (c *Container) initServices() {
 	// Auth Service
 	c.authService = service.NewAuthService(c.userRepo, c.authRedis, c.config.JWTSecret, c.config.JWTTTL)
 
-	// Embedding Client（暂时使用 Mock）
-	c.embeddingClient = service.NewMockEmbeddingClient(1024)
+	// Embedding Client（根据 EmbeddingType 决定使用哪个实现）
+	switch c.config.EmbeddingType {
+	case "qwen":
+		if c.config.AliYunAPIKey == "" {
+			log.Fatal("EMBEDDING_TYPE=qwen 但未配置 ALIYUN_API_KEY")
+		}
+		log.Printf("使用阿里云 Embedding API，模型: %s", c.config.EmbeddingModel)
+		c.embeddingClient = service.NewQwenEmbeddingClient(c.config.AliYunAPIKey, c.config.EmbeddingModel)
+	case "mock":
+		log.Println("使用 Mock Embedding（仅供测试）")
+		c.embeddingClient = service.NewMockEmbeddingClient(1024)
+	default:
+		log.Fatalf("不支持的 EMBEDDING_TYPE: %s (可选: mock, qwen)", c.config.EmbeddingType)
+	}
 
 	// 确保上传目录存在
 	if err := os.MkdirAll(c.config.UploadDir, 0755); err != nil {

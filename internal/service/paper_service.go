@@ -48,11 +48,11 @@ type PaperDTO struct {
 }
 
 type PaperService struct {
-	paperRepo            *repository.PaperRepository
-	chunkRepo            *repository.ChunkRepository
-	embeddingClient      EmbeddingClient
-	uploadDir            string
-	embeddingBatchSize   int
+	paperRepo               *repository.PaperRepository
+	chunkRepo               *repository.ChunkRepository
+	embeddingClient         EmbeddingClient
+	uploadDir               string
+	embeddingBatchSize      int
 	embeddingMaxConcurrency int
 }
 
@@ -65,11 +65,11 @@ func NewPaperService(
 	embeddingMaxConcurrency int,
 ) *PaperService {
 	return &PaperService{
-		paperRepo:            paperRepo,
-		chunkRepo:            chunkRepo,
-		embeddingClient:      embeddingClient,
-		uploadDir:            uploadDir,
-		embeddingBatchSize:   embeddingBatchSize,
+		paperRepo:               paperRepo,
+		chunkRepo:               chunkRepo,
+		embeddingClient:         embeddingClient,
+		uploadDir:               uploadDir,
+		embeddingBatchSize:      embeddingBatchSize,
 		embeddingMaxConcurrency: embeddingMaxConcurrency,
 	}
 }

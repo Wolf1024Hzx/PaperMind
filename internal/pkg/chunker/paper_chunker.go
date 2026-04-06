@@ -22,8 +22,9 @@ type ChunkResult struct {
 
 // ChunkSections 将论文的章节列表切分为适合 Embedding 的文本块
 // 策略：两级切片
-//   第一级：按 Section 切分（保持语义完整）
-//   第二级：对过长的 Section，按 token 数 + overlap 细分
+//
+//	第一级：按 Section 切分（保持语义完整）
+//	第二级：对过长的 Section，按 token 数 + overlap 细分
 func ChunkSections(sections []common.Section) []ChunkResult {
 	chunks := make([]ChunkResult, 0)
 
@@ -87,7 +88,7 @@ func splitByTokens(text string, chunkSize int, overlap int) []string {
 	result := make([]string, 0)
 
 	for start := 0; start < len(words); start += step {
-		end := min(start + chunkSize, len(words))
+		end := min(start+chunkSize, len(words))
 
 		result = append(result, strings.Join(words[start:end], " "))
 

@@ -17,8 +17,8 @@ type MarkdownMetadata struct {
 
 // MarkdownContent 表示从 Markdown 文件中提取的完整内容
 type MarkdownContent struct {
-	Sections  []common.Section
-	Metadata  MarkdownMetadata
+	Sections []common.Section
+	Metadata MarkdownMetadata
 }
 
 // ExtractMarkdown 从 Markdown 或纯文本文件中提取章节结构和元数据
@@ -125,7 +125,7 @@ func parseMarkdownContentWithMetadata(content string, fallbackTitle string) ([]c
 		}
 
 		// 提取标题到下一个标题之间的文本（不包括标题行本身）
-		contentLines := lines[heading.lineIndex+1:endIndex]
+		contentLines := lines[heading.lineIndex+1 : endIndex]
 		sectionContent := strings.TrimSpace(strings.Join(contentLines, "\n"))
 
 		sectionType := common.MatchSectionType(heading.title)

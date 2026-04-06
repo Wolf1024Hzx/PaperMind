@@ -95,17 +95,22 @@
 
 ### 2.2 分天推进计划
 
-**Day 6-7：骨架搭建**
+**Day 6-7：骨架搭建** ✅ 已完成
 
 - [x] 初始化 Go 项目，搭建 Gin + GORM 脚手架
-- [ ] 设计数据库表结构：`users`、`documents`、`chunks`（含向量字段）、`conversations`、`messages`
+- [x] 设计数据库表结构：`users`、`papers`、`chunks`（含向量字段）
 - [x] 实现文件上传接口（支持 PDF / Markdown）
-- [ ] 实现文本提取逻辑（PDF 用 Go 的 PDF 解析库）
+- [x] 实现 PDF 文本提取逻辑
+- [x] 实现 Markdown 文本提取逻辑
+- [x] 实现论文章节结构解析
 
-**Day 8-9：核心 RAG Pipeline**
+**Day 8-9：核心 RAG Pipeline** ✅ 已完成
 
-- [ ] 实现文本切片（Chunking）逻辑：按段落/固定 token 数切分，支持 overlap
-- [ ] 对接 Embedding API：将每个 chunk 转为向量并写入向量数据库
+- [x] 实现文本切片（Chunking）逻辑：按 Section 切分 + token 细分，支持 overlap
+- [x] 对接 Embedding API：将每个 chunk 转为向量并写入数据库
+- [x] 实现并发 Embedding 调用（errgroup + 批量处理）
+- [x] 项目结构重构：创建 app 包，main.go 简化
+- [x] 配置文件支持：.env 文件 + godotenv
 - [ ] 实现相似度检索接口：输入用户问题 → 生成问题向量 → 检索 Top-K 相关 chunk
 - [ ] 实现 Prompt 拼装与 LLM 调用：将检索结果与问题组合后调用大模型 API
 
