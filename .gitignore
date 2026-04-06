@@ -82,3 +82,40 @@ temp/
 sql/.idea/
 
 uploads/
+
+# ==================== Frontend (web) ====================
+# Dependencies
+web/node_modules/
+
+# Build output
+web/dist/
+
+# Cache
+web/.vite/
+web/.eslintcache
+
+# Environment files
+web/.env
+web/.env.local
+web/.env.*.local
+!web/.env.example
+
+# Logs
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/pnpm-debug.log*
+
+# Lock files (optional - uncomment if you want to ignore)
+# web/package-lock.json
+# web/yarn.lock
+# web/pnpm-lock.yaml
+
+# Editor directories and files
+web/.vscode/*
+!web/.vscode/extensions.json
+web/*.suo
+web/*.ntvs*
+web/*.njsproj
+web/*.sln
+web/*.sw?
