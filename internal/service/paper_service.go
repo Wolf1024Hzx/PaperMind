@@ -10,9 +10,12 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/pgvector/pgvector-go"
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
 	"wolfden.website/papermind/internal/model"
+	"wolfden.website/papermind/internal/pkg/chunker"
 	"wolfden.website/papermind/internal/pkg/common"
 	"wolfden.website/papermind/internal/pkg/extractor"
 	"wolfden.website/papermind/internal/pkg/parser"
@@ -45,14 +48,29 @@ type PaperDTO struct {
 }
 
 type PaperService struct {
-	paperRepo *repository.PaperRepository
-	uploadDir string
+	paperRepo            *repository.PaperRepository
+	chunkRepo            *repository.ChunkRepository
+	embeddingClient      EmbeddingClient
+	uploadDir            string
+	embeddingBatchSize   int
+	embeddingMaxConcurrency int
 }
 
-func NewPaperService(paperRepo *repository.PaperRepository, uploadDir string) *PaperService {
+func NewPaperService(
+	paperRepo *repository.PaperRepository,
+	chunkRepo *repository.ChunkRepository,
+	embeddingClient EmbeddingClient,
+	uploadDir string,
+	embeddingBatchSize int,
+	embeddingMaxConcurrency int,
+) *PaperService {
 	return &PaperService{
-		paperRepo: paperRepo,
-		uploadDir: uploadDir,
+		paperRepo:            paperRepo,
+		chunkRepo:            chunkRepo,
+		embeddingClient:      embeddingClient,
+		uploadDir:            uploadDir,
+		embeddingBatchSize:   embeddingBatchSize,
+		embeddingMaxConcurrency: embeddingMaxConcurrency,
 	}
 }
 
@@ -221,12 +239,85 @@ func (s *PaperService) processPaper(paperID uuid.UUID, filePath string) {
 			i, sec.Type, sec.Title, sec.StartPage, len(sec.Content))
 	}
 
-	// ========== 阶段 3: 切片 + Embedding（后续实现）==========
-	// s.updateStatus(ctx, paperID, "chunking")
-	// s.updateStatus(ctx, paperID, "embedding")
+	// ========== 切片 + Embedding ==========
 
-	// 临时：直接标记为 completed
+	// 先切片
+	s.updateStatus(ctx, paperID, "chunking")
+	chunkResults := chunker.ChunkSections(sections)
+
+	if len(chunkResults) == 0 {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s 切片结果为空", paperID)
+		return
+	}
+
+	log.Printf("论文 %s 切片完成，共 %d 个 chunks", paperID, len(chunkResults))
+
+	// 开始抽特征
+	s.updateStatus(ctx, paperID, "embedding")
+	texts := make([]string, len(chunkResults))
+	for i, cr := range chunkResults {
+		texts[i] = cr.Content
+	}
+
+	// 分批并发调用 Embedding API
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(s.embeddingMaxConcurrency)
+
+	allEmbeddings := make([][]float32, len(texts))
+
+	for batchStart := 0; batchStart < len(texts); batchStart += s.embeddingBatchSize {
+		start := batchStart
+		end := min(start+s.embeddingBatchSize, len(texts))
+
+		g.Go(func() error {
+			batch := texts[start:end]
+			embeddings, err := s.embeddingClient.Embed(gCtx, batch)
+			if err != nil {
+				return fmt.Errorf("Embedding 批次 [%d:%d] 失败: %w", start, end, err)
+			}
+			for i, emb := range embeddings {
+				allEmbeddings[start+i] = emb
+			}
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s Embedding 失败: %v", paperID, err)
+		return
+	}
+
+	// 构建 Chunk 模型并写入数据库
+	chunks := make([]model.Chunk, len(chunkResults))
+	for i, cr := range chunkResults {
+		sectionType := cr.SectionType
+		sectionTitle := cr.SectionTitle
+		pageNumber := cr.PageNumber
+
+		chunks[i] = model.Chunk{
+			PaperID:      paperID,
+			ChunkIndex:   i,
+			Content:      cr.Content,
+			TokenCount:   cr.TokenCount,
+			Embedding:    pgvector.NewVector(allEmbeddings[i]),
+			SectionType:  &sectionType,
+			SectionTitle: &sectionTitle,
+			PageNumber:   &pageNumber,
+		}
+	}
+
+	if err := s.chunkRepo.BatchCreate(ctx, chunks); err != nil {
+		s.updateStatus(ctx, paperID, "failed")
+		log.Printf("论文 %s chunks 写入数据库失败: %v", paperID, err)
+		return
+	}
+
+	// 更新论文状态和 chunk 数量
+	s.paperRepo.UpdateChunkCount(ctx, paperID, len(chunks))
 	s.updateStatus(ctx, paperID, "completed")
+	log.Printf("论文 %s 处理完成，共写入 %d 个 chunks", paperID, len(chunks))
 }
 
 // processPDF 提取 PDF 并解析章节

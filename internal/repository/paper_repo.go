@@ -100,3 +100,11 @@ func (r *PaperRepository) UpdateMetadataIfEmpty(ctx context.Context, paperID uui
 		Where("id = ?", paperID).
 		Updates(finalUpdates).Error
 }
+
+// UpdateChunkCount 更新论文的 chunk 数量
+func (r *PaperRepository) UpdateChunkCount(ctx context.Context, paperID uuid.UUID, count int) error {
+	return r.db.WithContext(ctx).
+		Model(&model.Paper{}).
+		Where("id = ?", paperID).
+		Update("chunk_count", count).Error
+}
