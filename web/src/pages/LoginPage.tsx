@@ -55,6 +55,20 @@ export default function LoginPage() {
             登录账户
           </h2>
 
+          {/* Test account hint */}
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-600 text-center">
+              测试账号：<span className="font-medium">test</span> / 密码：<span className="font-medium">123456</span>
+              <button
+                type="button"
+                onClick={() => { setAccount('test'); setPassword('123456'); }}
+                className="ml-2 text-blue-500 hover:text-blue-700 underline"
+              >
+                一键填充
+              </button>
+            </p>
+          </div>
+
           {/* Error messages */}
           {errors.length > 0 && (
             <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">

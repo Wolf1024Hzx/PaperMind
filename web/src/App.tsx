@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
+import { useHydration } from './hooks/useHydration'
 import Layout from './components/layout/Layout'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -9,13 +10,24 @@ import PapersPage from './pages/PapersPage'
 import ChatPage from './pages/ChatPage'
 import SettingsPage from './pages/SettingsPage'
 import NotFoundPage from './pages/NotFoundPage'
+import Spinner from './components/common/Spinner'
 
 function App() {
   const { isAuthenticated } = useAuthStore()
+  const isHydrated = useHydration()
+
+  // Wait for hydration before rendering routes
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
 
   return (
     <Routes>
-      // Public routes
+      {/* Public routes */}
       <Route path="/login" element={
         isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />
       } />
@@ -23,7 +35,7 @@ function App() {
         isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />
       } />
 
-      // Protected routes with layout
+      {/* Protected routes with layout */}
       <Route element={
         <ProtectedRoute>
           <Layout />
@@ -36,7 +48,7 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 
-      // 404
+      {/* 404 */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

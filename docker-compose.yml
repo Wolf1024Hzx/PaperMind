@@ -1,0 +1,25 @@
+services:
+  # === PostgreSQL 配置 ===
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: [用户名]
+      POSTGRES_PASSWORD: [密码]
+      POSTGRES_DB: paper_mind
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data
+
+  # === Redis 配置 ===
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    command: redis-server --requirepass [密码]
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data

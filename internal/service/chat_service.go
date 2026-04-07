@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
@@ -44,17 +45,22 @@ func NewChatService(
 }
 
 func (s *ChatService) Ask(ctx context.Context, userID uuid.UUID, req dto.ChatRequest) (*dto.ChatResult, error) {
+	startTime := time.Now()
+
 	// 1. 意图识别
 	mode := detectMode(req.Question)
 
 	// 2. 问题向量化
+	embedStart := time.Now()
 	embeddings, err := s.embeddingClient.Embed(ctx, []string{req.Question})
 	if err != nil {
 		return nil, fmt.Errorf("问题向量化失败: %w", err)
 	}
+	log.Printf("[耗时] Embedding: %v", time.Since(embedStart))
 	queryVector := pgvector.NewVector(embeddings[0])
 
 	// 3. 向量检索
+	searchStart := time.Now()
 	topK := s.retrievalTopK[mode]
 
 	results, err := s.vectorRepo.Search(ctx, &dto.RetrievalRequest{
@@ -68,6 +74,7 @@ func (s *ChatService) Ask(ctx context.Context, userID uuid.UUID, req dto.ChatReq
 	if err != nil {
 		return nil, fmt.Errorf("向量检索失败: %w", err)
 	}
+	log.Printf("[耗时] 向量检索: %v, 结果数: %d", time.Since(searchStart), len(results))
 
 	// 如果没有检索结果，返回提示信息
 	if len(results) == 0 {
@@ -123,6 +130,7 @@ func (s *ChatService) Ask(ctx context.Context, userID uuid.UUID, req dto.ChatReq
 	}
 
 	// 6. 调用 LLM
+	llmStart := time.Now()
 	messages := []ChatMessage{
 		{Role: "system", Content: systemPrompt},
 	}
@@ -133,13 +141,18 @@ func (s *ChatService) Ask(ctx context.Context, userID uuid.UUID, req dto.ChatReq
 	if err != nil {
 		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
+	log.Printf("[耗时] LLM调用: %v, promptTokens: %d, completionTokens: %d", time.Since(llmStart), llmResp.PromptTokens, llmResp.CompletionTokens)
 
 	// 7. 保存对话记录
+	saveStart := time.Now()
 	conversationID, err := s.saveConversation(ctx, userID, req, mode, llmResp, results)
 	if err != nil {
 		// 保存失败不影响返回，只记录日志
 		log.Printf("保存对话记录失败: %v", err)
 	}
+	log.Printf("[耗时] 保存对话: %v", time.Since(saveStart))
+
+	log.Printf("[耗时] 总计: %v", time.Since(startTime))
 
 	// 8. 返回结果
 	return &dto.ChatResult{
@@ -189,10 +202,11 @@ func (s *ChatService) saveConversation(
 			log.Printf("更新对话时间失败: %v", err) // 不影响主流程
 		}
 	} else {
-		// 创建新对话，标题用问题前50字符
+		// 创建新对话，标题用问题前20个字符（按 rune 计数，避免截断 UTF-8）
 		title := req.Question
-		if len(title) > 50 {
-			title = title[:50] + "..."
+		runes := []rune(title)
+		if len(runes) > 20 {
+			title = string(runes[:20]) + "..."
 		}
 		conv := &model.Conversation{
 			UserID: userID,

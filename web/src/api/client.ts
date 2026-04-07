@@ -1,7 +1,7 @@
 import type { ApiError } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = '/paper_mind_api/v1';
 
 // Generic API error class
 export class ApiErrorClass extends Error {
