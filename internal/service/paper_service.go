@@ -56,8 +56,8 @@ func (s *PaperService) UploadPaper(ctx context.Context, userID string, input dto
 		return nil, ErrInvalidInput
 	}
 
-	// 检查文件是否已存在（去重）
-	_, err = s.paperRepo.FindByFileHash(ctx, input.FileHash)
+	// 检查当前用户是否已上传过该文件（去重）
+	_, err = s.paperRepo.FindByUserIDAndFileHash(ctx, userUUID, input.FileHash)
 	if err == nil {
 		return nil, ErrFileAlreadyExists
 	}

@@ -50,6 +50,16 @@ func (r *PaperRepository) FindByFileHash(ctx context.Context, hash string) (*mod
 	return &paper, nil
 }
 
+func (r *PaperRepository) FindByUserIDAndFileHash(ctx context.Context, userID uuid.UUID, hash string) (*model.Paper, error) {
+	var paper model.Paper
+	err := r.db.WithContext(ctx).First(&paper, "user_id = ? AND file_hash = ?", userID, hash).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &paper, nil
+}
+
 func (r *PaperRepository) UpdatePaperInfo(ctx context.Context, id uuid.UUID, updates map[string]any) error {
 	return r.db.WithContext(ctx).
 		Model(&model.Paper{}).
