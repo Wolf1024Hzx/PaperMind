@@ -41,8 +41,11 @@ CREATE TABLE papers (
 
 -- 索引
 CREATE INDEX idx_papers_user_id ON papers(user_id);
-CREATE INDEX idx_papers_file_hash ON papers(file_hash);    -- 去重检查
+CREATE INDEX idx_papers_file_hash ON papers(file_hash);    -- 全局按文件哈希查询（如管理功能）
 CREATE INDEX idx_papers_year ON papers(year);               -- 支持按年份筛选检索范围
+
+-- 复合唯一索引：确保每个用户的文件去重，同时优化查询性能
+CREATE UNIQUE INDEX idx_papers_user_file_hash ON papers(user_id, file_hash);
 
 -- chunks 表（论文切片 + 向量）
 CREATE TABLE chunks (
