@@ -15,6 +15,13 @@ export class ApiErrorClass extends Error {
   }
 }
 
+// Handle 401 unauthorized - clear auth and redirect to login
+function handleUnauthorized() {
+  const store = useAuthStore.getState();
+  store.logout();
+  window.location.href = '/login';
+}
+
 // Base fetch wrapper with JWT handling
 async function apiFetch<T>(
   endpoint: string,
@@ -37,6 +44,10 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
     const errorData: ApiError = await response.json().catch(() => ({
       message: '请求失败',
     }));
@@ -96,6 +107,10 @@ export async function apiUpload<T>(
   });
 
   if (!response.ok) {
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
     const errorData: ApiError = await response.json().catch(() => ({
       message: '上传失败',
     }));
